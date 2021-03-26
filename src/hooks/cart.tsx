@@ -28,7 +28,7 @@ const CartContext = createContext<CartContext | null>(null);
 const CartProvider: React.FC = ({ children }) => {
   const [products, setProducts] = useState<Product[]>([]);
 
-  const loadProducts = async (): Promise<void> => {
+  const loadProducts = useCallback(async () => {
     const cartProductsId = await AsyncStorage.getAllKeys();
 
     if (!cartProductsId) {
@@ -44,7 +44,7 @@ const CartProvider: React.FC = ({ children }) => {
     });
 
     setProducts(cartProductsParsed.filter(cartProduct => !!cartProduct));
-  };
+  }, []);
 
   const getProduct = async (id: string): Promise<Product | null> => {
     const product = await AsyncStorage.getItem(id);
@@ -53,11 +53,11 @@ const CartProvider: React.FC = ({ children }) => {
   };
 
   const updateCart = (product: Product): Promise<void> => {
-    if (product.quantity && product.quantity > 0) {
+    if (product.quantity && product.quantity >= 0) {
       return AsyncStorage.mergeItem(product.id, JSON.stringify(product));
     }
 
-    if (!product.quantity || product.quantity === 0) {
+    if (!product.quantity || product.quantity < 0) {
       return AsyncStorage.removeItem(product.id);
     }
 
@@ -66,51 +66,60 @@ const CartProvider: React.FC = ({ children }) => {
 
   useEffect(() => {
     loadProducts();
-  }, []);
+  }, [loadProducts]);
 
-  const addToCart = useCallback(async product => {
-    const cartProduct = await getProduct(product.id);
+  const addToCart = useCallback(
+    async product => {
+      const cartProduct = await getProduct(product.id);
 
-    if (!cartProduct) {
-      const cartProductToAdd = {
-        ...product,
-        quantity: 1,
-      };
+      if (!cartProduct) {
+        const cartProductToAdd = {
+          ...product,
+          quantity: 1,
+        };
 
-      await AsyncStorage.setItem(
-        cartProductToAdd.id,
-        JSON.stringify(cartProductToAdd),
-      );
-    } else {
-      cartProduct.quantity += 1;
+        await AsyncStorage.setItem(
+          cartProductToAdd.id,
+          JSON.stringify(cartProductToAdd),
+        );
+      } else {
+        cartProduct.quantity += 1;
 
-      await updateCart(cartProduct);
-    }
+        await updateCart(cartProduct);
+      }
 
-    loadProducts();
-  }, []);
-
-  const increment = useCallback(async id => {
-    const cartProduct = await getProduct(id);
-
-    if (cartProduct) {
-      cartProduct.quantity += 1;
-
-      await updateCart(cartProduct);
       loadProducts();
-    }
-  }, []);
+    },
+    [loadProducts],
+  );
 
-  const decrement = useCallback(async id => {
-    const cartProduct = await getProduct(id);
+  const increment = useCallback(
+    async id => {
+      const cartProduct = await getProduct(id);
 
-    if (cartProduct) {
-      cartProduct.quantity -= 1;
+      if (cartProduct) {
+        cartProduct.quantity += 1;
 
-      await updateCart(cartProduct);
-      loadProducts();
-    }
-  }, []);
+        await updateCart(cartProduct);
+        loadProducts();
+      }
+    },
+    [loadProducts],
+  );
+
+  const decrement = useCallback(
+    async id => {
+      const cartProduct = await getProduct(id);
+
+      if (cartProduct) {
+        cartProduct.quantity -= 1;
+
+        await updateCart(cartProduct);
+        loadProducts();
+      }
+    },
+    [loadProducts],
+  );
 
   const value = React.useMemo(
     () => ({ addToCart, increment, decrement, products }),
